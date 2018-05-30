@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>Hexo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="laser scan matcher 笔记整体流程 LaserScanMatcher类中，先initParams();初始化参数，然后设定ros的发布节点和接受节点 然后看雷达数据函数LaserScanMatcher::scanCallback，其中调用了两个函数laserScanToLDP(scan_msg, curr_ldp_scan);和processScan(curr_ldp_scan,">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Hexo">
+<meta property="og:url" content="http://yoursite.com/2018/05/30/laser scan matcher 笔记/index.html">
+<meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="laser scan matcher 笔记整体流程 LaserScanMatcher类中，先initParams();初始化参数，然后设定ros的发布节点和接受节点 然后看雷达数据函数LaserScanMatcher::scanCallback，其中调用了两个函数laserScanToLDP(scan_msg, curr_ldp_scan);和processScan(curr_ldp_scan,">
+<meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2018-05-29T13:45:25.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hexo">
+<meta name="twitter:description" content="laser scan matcher 笔记整体流程 LaserScanMatcher类中，先initParams();初始化参数，然后设定ros的发布节点和接受节点 然后看雷达数据函数LaserScanMatcher::scanCallback，其中调用了两个函数laserScanToLDP(scan_msg, curr_ldp_scan);和processScan(curr_ldp_scan,">
+  
+    <link rel="alternate" href="/atom.xml" title="Hexo" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Hexo</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-laser scan matcher 笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/05/30/laser scan matcher 笔记/" class="article-date">
+  <time datetime="2018-05-30T06:07:46.956Z" itemprop="datePublished">2018-05-30</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="laser-scan-matcher-笔记"><a href="#laser-scan-matcher-笔记" class="headerlink" title="laser scan matcher 笔记"></a>laser scan matcher 笔记</h1><h3 id="整体流程"><a href="#整体流程" class="headerlink" title="整体流程"></a>整体流程</h3><ol>
+<li><code>LaserScanMatcher</code>类中，先<code>initParams();</code>初始化参数，然后设定<code>ros</code>的发布节点和接受节点</li>
+<li><p>然后看雷达数据函数<code>LaserScanMatcher::scanCallback</code>，其中调用了两个函数<br><code>laserScanToLDP(scan_msg, curr_ldp_scan);</code>和<code>processScan(curr_ldp_scan, scan_msg-&gt;header.stamp);</code><br>，我们一个一个看  </p>
+<ul>
+<li><p>laserScanToLDP函数，把ros的laser_scan转换成本程序定义的雷达格式<code>struct laser_data</code>，<code>typedef struct laser_data* LDP;</code> 绕了个大弯，这个<code>LDP</code> 中包含了里程计信息 <code>odometry</code>和真是位置<code>true_pose</code> <code>estimate</code></p>
+</li>
+<li><p>processScan函数，把转换过的雷达格式传入</p>
+<ul>
+<li>首先预测根据前后两帧的变化时间预测<code>getPrediction</code>位姿变化</li>
+<li>然后 <code>createTfFromXYTheta</code>得到tf转换，<strong>这里发现个好东西<code>tf::Transform</code>可以直接运算<code>pr_ch_l = laser_to_base_ * f2b_.inverse() * pr_ch * f2b_ * base_to_laser_ ;</code>,他们分别是上一个tf，</strong> ，最后得到当前预测的位置在全局坐标系下的坐标</li>
+<li>这里才到了最关键最重要的地方 <strong>ICP</strong>,调用CSM（ <a href="https://censi.science/software/csm/" target="_blank" rel="noopener">C(anonical) Scan Matcher (CSM)</a> ）的点到线的ICP算法<code>sm_icp(&amp;input_, &amp;output_)</code>,看了一晚上了，好像看错了库</li>
+<li>后面就是对<code>sm_icp</code>求得的结果进行验证，并转换成tf，最后整理发布就完鸟。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>关键的关键<code>sm_icp</code></p>
+</li>
+</ol>
+<p><code>sm_icp</code>一个<code>sm_params</code>结构体，并返回一个<code>sm_result</code>,那么，如果我只想用这个库来完成我的匹配工作，我就只需要知道这个输入的结构，然后调用就完事了。<br><code>sm_params</code>在<a href="https://github.com/AndreaCensi/csm/blob/master/csm_manual.pdf" target="_blank" rel="noopener">sm_icp手册第7节. Embedding CSM in your programs</a></p>
+<p>接下来就实验一下吧</p>
+<hr>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tf::Transform 的骚操作：</span><br><span class="line">  input_.first_guess[0] = pr_ch_l.getOrigin().getX(); // 得到xy</span><br><span class="line">  input_.first_guess[1] = pr_ch_l.getOrigin().getY();</span><br><span class="line">  input_.first_guess[2] = tf::getYaw(pr_ch_l.getRotation()); //得到水平旋转角，帅</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/05/30/laser scan matcher 笔记/" data-id="cjhspmi3r0002asvq5fe21q0a" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2018/05/30/ROS的launch文件常用语法/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          (no title)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/05/30/hello-world/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Hello World</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/05/">May 2018</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2018/05/30/ROS的launch文件常用语法/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2018/05/30/laser scan matcher 笔记/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2018/05/30/hello-world/">Hello World</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2018 John Doe<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>

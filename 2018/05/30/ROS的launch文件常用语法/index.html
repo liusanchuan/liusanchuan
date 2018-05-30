@@ -7,13 +7,17 @@
   
   <title>Hexo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
+  <meta name="description" content="ROS的launch文件常用语法星期二, 29. 五月 2018 07:45下午 [TOC]  1. 最外围必须有 &amp;lt;launch&amp;gt; ... ... &amp;lt;/launch&amp;gt;  2. 节点12345678910&amp;lt;node 	pkg=&amp;quot;包名&amp;quot; 	type=&amp;quot;节点名&amp;quot; 	name=&amp;quot;对节点名重命名，覆盖ros::init中的名字">
+<meta property="og:type" content="article">
 <meta property="og:title" content="Hexo">
-<meta property="og:url" content="http://yoursite.com/index.html">
+<meta property="og:url" content="http://yoursite.com/2018/05/30/ROS的launch文件常用语法/index.html">
 <meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="ROS的launch文件常用语法星期二, 29. 五月 2018 07:45下午 [TOC]  1. 最外围必须有 &amp;lt;launch&amp;gt; ... ... &amp;lt;/launch&amp;gt;  2. 节点12345678910&amp;lt;node 	pkg=&amp;quot;包名&amp;quot; 	type=&amp;quot;节点名&amp;quot; 	name=&amp;quot;对节点名重命名，覆盖ros::init中的名字">
 <meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2018-05-29T13:45:25.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Hexo">
+<meta name="twitter:description" content="ROS的launch文件常用语法星期二, 29. 五月 2018 07:45下午 [TOC]  1. 最外围必须有 &amp;lt;launch&amp;gt; ... ... &amp;lt;/launch&amp;gt;  2. 节点12345678910&amp;lt;node 	pkg=&amp;quot;包名&amp;quot; 	type=&amp;quot;节点名&amp;quot; 	name=&amp;quot;对节点名重命名，覆盖ros::init中的名字">
   
     <link rel="alternate" href="/atom.xml" title="Hexo" type="application/atom+xml">
   
@@ -60,9 +64,7 @@
   </div>
 </header>
       <div class="outer">
-        <section id="main">
-  
-    <article id="post-ROS的launch文件常用语法" class="article article-type-post" itemscope itemprop="blogPost">
+        <section id="main"><article id="post-ROS的launch文件常用语法" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/05/30/ROS的launch文件常用语法/" class="article-date">
   <time datetime="2018-05-30T06:07:46.991Z" itemprop="datePublished">2018-05-30</time>
@@ -100,105 +102,19 @@ http://wiki.ros.org/roslaunch ros中launch文件的格式
     </footer>
   </div>
   
-</article>
-
-
+    
+<nav id="article-nav">
   
-    <article id="post-laser scan matcher 笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/05/30/laser scan matcher 笔记/" class="article-date">
-  <time datetime="2018-05-30T06:07:46.956Z" itemprop="datePublished">2018-05-30</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <h1 id="laser-scan-matcher-笔记"><a href="#laser-scan-matcher-笔记" class="headerlink" title="laser scan matcher 笔记"></a>laser scan matcher 笔记</h1><h3 id="整体流程"><a href="#整体流程" class="headerlink" title="整体流程"></a>整体流程</h3><ol>
-<li><code>LaserScanMatcher</code>类中，先<code>initParams();</code>初始化参数，然后设定<code>ros</code>的发布节点和接受节点</li>
-<li><p>然后看雷达数据函数<code>LaserScanMatcher::scanCallback</code>，其中调用了两个函数<br><code>laserScanToLDP(scan_msg, curr_ldp_scan);</code>和<code>processScan(curr_ldp_scan, scan_msg-&gt;header.stamp);</code><br>，我们一个一个看  </p>
-<ul>
-<li><p>laserScanToLDP函数，把ros的laser_scan转换成本程序定义的雷达格式<code>struct laser_data</code>，<code>typedef struct laser_data* LDP;</code> 绕了个大弯，这个<code>LDP</code> 中包含了里程计信息 <code>odometry</code>和真是位置<code>true_pose</code> <code>estimate</code></p>
-</li>
-<li><p>processScan函数，把转换过的雷达格式传入</p>
-<ul>
-<li>首先预测根据前后两帧的变化时间预测<code>getPrediction</code>位姿变化</li>
-<li>然后 <code>createTfFromXYTheta</code>得到tf转换，<strong>这里发现个好东西<code>tf::Transform</code>可以直接运算<code>pr_ch_l = laser_to_base_ * f2b_.inverse() * pr_ch * f2b_ * base_to_laser_ ;</code>,他们分别是上一个tf，</strong> ，最后得到当前预测的位置在全局坐标系下的坐标</li>
-<li>这里才到了最关键最重要的地方 <strong>ICP</strong>,调用CSM（ <a href="https://censi.science/software/csm/" target="_blank" rel="noopener">C(anonical) Scan Matcher (CSM)</a> ）的点到线的ICP算法<code>sm_icp(&amp;input_, &amp;output_)</code>,看了一晚上了，好像看错了库</li>
-<li>后面就是对<code>sm_icp</code>求得的结果进行验证，并转换成tf，最后整理发布就完鸟。</li>
-</ul>
-</li>
-</ul>
-</li>
-<li><p>关键的关键<code>sm_icp</code></p>
-</li>
-</ol>
-<p><code>sm_icp</code>一个<code>sm_params</code>结构体，并返回一个<code>sm_result</code>,那么，如果我只想用这个库来完成我的匹配工作，我就只需要知道这个输入的结构，然后调用就完事了。<br><code>sm_params</code>在<a href="https://github.com/AndreaCensi/csm/blob/master/csm_manual.pdf" target="_blank" rel="noopener">sm_icp手册第7节. Embedding CSM in your programs</a></p>
-<p>接下来就实验一下吧</p>
-<hr>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tf::Transform 的骚操作：</span><br><span class="line">  input_.first_guess[0] = pr_ch_l.getOrigin().getX(); // 得到xy</span><br><span class="line">  input_.first_guess[1] = pr_ch_l.getOrigin().getY();</span><br><span class="line">  input_.first_guess[2] = tf::getYaw(pr_ch_l.getRotation()); //得到水平旋转角，帅</span><br></pre></td></tr></table></figure>
+  
+    <a href="/2018/05/30/laser scan matcher 笔记/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title"></div>
+    </a>
+  
+</nav>
 
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/05/30/laser scan matcher 笔记/" data-id="cjhspmi3r0002asvq5fe21q0a" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
   
 </article>
-
-
-  
-    <article id="post-hello-world" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/05/30/hello-world/" class="article-date">
-  <time datetime="2018-05-30T01:02:21.534Z" itemprop="datePublished">2018-05-30</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/05/30/hello-world/">Hello World</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="noopener">Deployment</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/05/30/hello-world/" data-id="cjhspmi180000asvq5dax9mgf" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
-
 
 </section>
         
